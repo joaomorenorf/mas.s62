@@ -41,7 +41,7 @@ There is a public key and 4 signatures provided in the signatures.go file.  Give
 
 Note that this may take a decent amount of CPU time even on a good computer.  We're not talking days or anything though; 4 signatures is enough to make it so that an efficient implementation is relatively quick.
 
-To make sure you're in the right ballpark: On an AMD Ryzen 7 1700 CPU, using 8 cores, my (adiabat / Tadge) implementation could create a forgery in about 3 minutes of real time.  An equally efficient signle core implementation would take about 25 minutes.  On slower CPUs or with less efficient code it may take longer.
+To make sure you're in the right ballpark: On an AMD Ryzen 7 1700 CPU, using 8 cores, my (adiabat / Tadge) implementation could create a forgery in about 3 minutes of real time.  An equally efficient single core implementation would take about 25 minutes.  On slower CPUs or with less efficient code it may take longer.
 
 If you use CUDA or AVX-512 or AES-NI or something crazy like that and get it to run in 5 seconds, cool!  It should still run in go and pass the tests here, but note that you can do all the "work" in a different program and import the solution to this code if you want.
 
