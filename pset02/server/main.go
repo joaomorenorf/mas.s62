@@ -2,8 +2,9 @@ package main
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -13,10 +14,72 @@ import (
 )
 
 var (
-	genesisBlock     = "0000000000000000000000000000000000000000000000000000000000000000 satoshi 11970128322"
-	chainFilename    = "./chain.txt"
-	chainOldFilename = "./chainreload.txt"
+	genesisBlock  = "0000000000000000000000000000000000000000000000000000000000000000 satoshi 11970128322"
+	chainFilename = "./chain.txt"
 )
+
+// A hash is a sha256 hash, as in pset01
+type Hash [32]byte
+
+// ToString gives you a hex string of the hash
+func (hs Hash) ToString() string {
+	return fmt.Sprintf("%x", hs)
+}
+
+// Blocks are what make the chain in this pset; different than just a 32 byte array
+// from last time.  Has a previous block hash, a name and a nonce.
+type Block struct {
+	PrevHash Hash
+	Name     string
+	Nonce    string
+}
+
+// ToString turns a block into an ascii string which can be sent over the
+// network or printed to the screen.
+func (bl Block) ToString() string {
+	return fmt.Sprintf("%x %s %s", bl.PrevHash, bl.Name, bl.Nonce)
+}
+
+// Hash returns the sha256 hash of the block.  Hopefully starts with zeros!
+func (bl Block) Hash() Hash {
+	return sha256.Sum256([]byte(bl.ToString()))
+}
+
+// BlockFromString takes in a string and converts it to a block, if possible
+func BlockFromString(s string) (Block, error) {
+	var bl Block
+
+	// check string length
+	if len(s) < 66 || len(s) > 100 {
+		return bl, fmt.Errorf("invalid string length %d, expect 66 to 100", len(s))
+	}
+	// split into 3 substrings via spaces
+	subStrings := strings.Split(s, " ")
+
+	if len(subStrings) != 3 {
+		return bl, fmt.Errorf("got %d elements, expect 3", len(subStrings))
+	}
+
+	hashbytes, err := hex.DecodeString(subStrings[0])
+	if err != nil {
+		return bl, err
+	}
+	if len(hashbytes) != 32 {
+		return bl, fmt.Errorf("got %d byte hash, expect 32", len(hashbytes))
+	}
+
+	copy(bl.PrevHash[:], hashbytes)
+
+	bl.Name = subStrings[1]
+
+	// remove trailing newline if there; the blocks don't include newlines, but
+	// when transmitted over TCP there's a newline to signal end of block
+	bl.Nonce = strings.TrimSpace(subStrings[2])
+
+	// TODO add more checks on name/nonce ...?
+
+	return bl, nil
+}
 
 // BlockChain is not actually a blockchain, it's just the tip.
 // The chain itself only exists in a file.
@@ -27,12 +90,6 @@ type BlockChain struct {
 }
 
 func Server() error {
-
-	f2, err := os.Create(chainFilename)
-	if err != nil {
-		return err
-	}
-	f2.Close()
 
 	var bc BlockChain
 
@@ -48,7 +105,7 @@ func Server() error {
 	go HandleBlockSubmission(&bc)
 
 	// handler is running, so feed it blocks from disk
-	err = LoadChain(&bc)
+	err := LoadChain(&bc)
 	if err != nil {
 		return err
 	}
@@ -75,9 +132,6 @@ func Server() error {
 		go HandleServerConnection(serverConnection, &bc)
 
 	}
-
-	return nil
-
 }
 
 type Score struct {
@@ -98,7 +152,7 @@ func ServeHiScores(l net.Listener) {
 		if err != nil {
 			log.Printf("Hi score server error: %s\n", err.Error())
 		}
-		chain, err := ioutil.ReadFile(chainFilename)
+		chain, err := os.ReadFile(chainFilename)
 		if err != nil {
 			log.Printf("Hi score server error: %s\n", err.Error())
 		}
@@ -133,14 +187,14 @@ func ServeHiScores(l net.Listener) {
 		// sort slice
 		sort.Sort(sort.Reverse(sl))
 
-		scoreReply := fmt.Sprintf("--- pset02 high score list ---\n")
-		scoreReply += fmt.Sprintf("rank\tpoints\tname\n")
+		scoreReply := "--- pset02 high score list ---\n"
+		scoreReply += "rank\tpoints\tname\n"
 		// print in order to string
 		for i, sc := range sl {
 			scoreReply += fmt.Sprintf("#%d\t%d\t%s\n", i, sc.points, sc.name)
 		}
 
-		recentReply := fmt.Sprintf("--- most recent blocks ---\n")
+		recentReply := "--- most recent blocks ---\n"
 		for i := len(lines) - 10; i < len(lines); i++ {
 			recentReply += lines[i] + "\n"
 		}
@@ -156,7 +210,7 @@ func ServeHiScores(l net.Listener) {
 // LoadChain reloads an old chain from disk
 func LoadChain(bc *BlockChain) error {
 
-	f, err := os.OpenFile(chainOldFilename, os.O_RDONLY, 0666)
+	f, err := os.OpenFile(chainFilename, os.O_RDONLY, 0666)
 	if err != nil {
 		return err
 	}
@@ -165,9 +219,7 @@ func LoadChain(bc *BlockChain) error {
 
 	for scanner.Scan() {
 		blockLine := scanner.Text()
-		if err != nil {
-			return err
-		}
+
 		newBl, err := BlockFromString(string(blockLine))
 		if err != nil {
 			return err
@@ -224,11 +276,11 @@ func HandleServerConnection(connection net.Conn, bc *BlockChain) {
 
 			// first check if it will append
 			if !CheckNextBlock(bc.tip, newBl) {
-				sendBytes = []byte(fmt.Sprintf(
-					"Block invalid: not enough work, or doesn't connect to tip\n"))
+				sendBytes = []byte(
+					"Block invalid: not enough work, or doesn't connect to tip\n")
 			} else {
-				sendBytes = []byte(fmt.Sprintf(
-					"Block accepted\n"))
+				sendBytes = []byte(
+					"Block accepted\n")
 			}
 			// submit block to handler routine
 			bc.bchan <- newBl
@@ -243,7 +295,6 @@ func HandleServerConnection(connection net.Conn, bc *BlockChain) {
 	// disconnect client
 	connection.Close()
 
-	return
 }
 
 // HandleBlockSubmission checks that the block is OK and fits on the end of the
@@ -274,7 +325,7 @@ func HandleBlockSubmission(bc *BlockChain) {
 		bc.mtx.Lock()
 		bc.tip = proposedBlock
 
-		f, err := os.OpenFile(chainFilename, os.O_APPEND|os.O_WRONLY, 0666)
+		f, err := os.OpenFile(chainFilename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 		if err != nil {
 			// crash if file doesn't work
 			panic(err)
@@ -324,4 +375,8 @@ func CheckWork(bl Block, targetBits uint8) bool {
 		}
 	}
 	return true
+}
+
+func main() {
+	panic(Server())
 }

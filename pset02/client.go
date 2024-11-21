@@ -7,11 +7,11 @@ import (
 )
 
 var (
-	// note that this server is not up yet!  Will be soon!
-	serverHostname = "hubris.media.mit.edu:6262"
+	// Original Hostname
+	// serverHostname = "hubris.media.mit.edu:6262"
 
 	// uncomment for testing & running a server on localhost
-	//	serverHostname = "127.0.0.1:6262"
+	serverHostname = "127.0.0.1:6262"
 )
 
 // The functions in this file are provided to give connectivity to the
@@ -90,7 +90,7 @@ func SendBlockToServer(bl Block) error {
 		return err
 	}
 
-	fmt.Printf("Server resposnse: %s\n", string(ResponseLine))
+	fmt.Printf("Server response: %s\n", string(ResponseLine))
 
 	return connection.Close()
 }

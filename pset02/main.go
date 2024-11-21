@@ -11,8 +11,8 @@ import (
 type Hash [32]byte
 
 // ToString gives you a hex string of the hash
-func (self Hash) ToString() string {
-	return fmt.Sprintf("%x", self)
+func (hs Hash) ToString() string {
+	return fmt.Sprintf("%x", hs)
 }
 
 // Blocks are what make the chain in this pset; different than just a 32 byte array
@@ -25,13 +25,17 @@ type Block struct {
 
 // ToString turns a block into an ascii string which can be sent over the
 // network or printed to the screen.
+func (bl Block) ToString() string {
+	return fmt.Sprintf("%x %s %s", bl.PrevHash, bl.Name, bl.Nonce)
+}
 func (self Block) ToString() string {
 	return fmt.Sprintf("%x %s %s", self.PrevHash, self.Name, self.Nonce)
 }
 
 // Hash returns the sha256 hash of the block.  Hopefully starts with zeros!
-func (self Block) Hash() Hash {
-	return sha256.Sum256([]byte(self.ToString()))
+func (bl Block) Hash() Hash {
+	return sha256.Sum256([]byte(bl.ToString()))
+}
 }
 
 // BlockFromString takes in a string and converts it to a block, if possible
@@ -40,7 +44,7 @@ func BlockFromString(s string) (Block, error) {
 
 	// check string length
 	if len(s) < 66 || len(s) > 100 {
-		return bl, fmt.Errorf("Invalid string length %d, expect 66 to 100", len(s))
+		return bl, fmt.Errorf("invalid string length %d, expect 66 to 100", len(s))
 	}
 	// split into 3 substrings via spaces
 	subStrings := strings.Split(s, " ")
